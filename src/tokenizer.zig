@@ -138,14 +138,15 @@ pub const Tokenizer = struct {
         var len: usize = 1;
         while (self.cursor + len < self.source.len and !self.checkAt(self.cursor + len, '"')) : (len += 1) {}
         if (self.checkAt(self.cursor + len, '"')) {
+            len += 1;
             return self.makeToken(.STRING, len);
         } else {
-            return self.makeToken(.ILLEGAL, len);
+            return self.makeToken(.ILLEGAL, 1);
         }
     }
 
     fn checkKeyword(self: *const Tokenizer, keyword: []const u8) bool {
-        return self.cursor + keyword.len < self.source.len and std.mem.eql(
+        return self.cursor + keyword.len <= self.source.len and std.mem.eql(
             u8,
             self.source[self.cursor .. self.cursor + keyword.len],
             keyword,
@@ -154,32 +155,44 @@ pub const Tokenizer = struct {
 
     fn nextIdentifier(self: *const Tokenizer) Token {
         var len: usize = 1;
-        while (self.cursor + len < self.source.len and self.isIdentifierAt(self.cursor + len)) : (len += 1) {}
+        while (self.cursor + len < self.source.len and
+            (self.isIdentifierAt(self.cursor + len) or self.isDigitAt(self.cursor + len))) : (len += 1)
+        {}
         var token_type: TokenType = .IDENTIFIER;
-        if (self.checkKeyword("var")) {
-            token_type = .VAR;
-        } else if (self.checkKeyword("fn")) {
-            token_type = .FUNCTION;
-        } else if (self.checkKeyword("for")) {
-            token_type = .FOR;
-        } else if (self.checkKeyword("false")) {
-            token_type = .FALSE;
-        } else if (self.checkKeyword("return")) {
-            token_type = .RETURN;
-        } else if (self.checkKeyword("true")) {
-            token_type = .TRUE;
-        } else if (self.checkKeyword("nil")) {
-            token_type = .NIL;
-        } else if (self.checkKeyword("if")) {
-            token_type = .IF;
-        } else if (self.checkKeyword("else")) {
-            token_type = .ELSE;
-        } else if (self.checkKeyword("while")) {
-            token_type = .WHILE;
-        } else if (self.checkKeyword("and")) {
-            token_type = .AND;
-        } else if (self.checkKeyword("or")) {
-            token_type = .OR;
+        if (len == 2) {
+            if (self.checkKeyword("fn")) {
+                token_type = .FUNCTION;
+            } else if (self.checkKeyword("if")) {
+                token_type = .IF;
+            } else if (self.checkKeyword("or")) {
+                token_type = .OR;
+            }
+        } else if (len == 3) {
+            if (self.checkKeyword("var")) {
+                token_type = .VAR;
+            } else if (self.checkKeyword("for")) {
+                token_type = .FOR;
+            } else if (self.checkKeyword("nil")) {
+                token_type = .NIL;
+            } else if (self.checkKeyword("and")) {
+                token_type = .AND;
+            }
+        } else if (len == 4) {
+            if (self.checkKeyword("true")) {
+                token_type = .TRUE;
+            } else if (self.checkKeyword("else")) {
+                token_type = .ELSE;
+            }
+        } else if (len == 5) {
+            if (self.checkKeyword("false")) {
+                token_type = .FALSE;
+            } else if (self.checkKeyword("while")) {
+                token_type = .WHILE;
+            }
+        } else if (len == 6) {
+            if (self.checkKeyword("return")) {
+                token_type = .RETURN;
+            }
         }
         return self.makeToken(token_type, len);
     }
@@ -210,6 +223,9 @@ pub const Tokenizer = struct {
                 },
                 else => break :skip_whitespace,
             }
+        }
+        if (self.cursor == self.source.len) {
+            return self.makeToken(.EOF, 0);
         }
         var token: Token = undefined;
         switch (self.source[self.cursor]) {
