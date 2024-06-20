@@ -227,33 +227,29 @@ pub const Tokenizer = struct {
         if (self.cursor == self.source.len) {
             return self.makeToken(.EOF, 0);
         }
-        var token: Token = undefined;
-        switch (self.source[self.cursor]) {
-            '=' => token = self.nextEqual(),
-            '!' => token = self.nextBang(),
-            '>' => token = self.nextGreater(),
-            '<' => token = self.nextLess(),
-            '+' => token = self.makeToken(.PLUS, 1),
-            '-' => token = self.makeToken(.MINUS, 1),
-            '*' => token = self.makeToken(.STAR, 1),
-            '/' => token = self.makeToken(.SLASH, 1),
-            ',' => token = self.makeToken(.COMMA, 1),
-            ';' => token = self.makeToken(.SEMICOLON, 1),
-            '(' => token = self.makeToken(.LPAREN, 1),
-            ')' => token = self.makeToken(.RPAREN, 1),
-            '{' => token = self.makeToken(.LBRACE, 1),
-            '}' => token = self.makeToken(.RBRACE, 1),
-            '"' => token = self.nextString(),
-            else => {
-                if (self.isDigitAt(self.cursor)) {
-                    token = self.nextNumber();
-                } else if (self.isIdentifierAt(self.cursor)) {
-                    token = self.nextIdentifier();
-                } else {
-                    token = self.makeToken(.ILLEGAL, 1);
-                }
-            },
-        }
+        const token: Token = switch (self.source[self.cursor]) {
+            '=' => self.nextEqual(),
+            '!' => self.nextBang(),
+            '>' => self.nextGreater(),
+            '<' => self.nextLess(),
+            '+' => self.makeToken(.PLUS, 1),
+            '-' => self.makeToken(.MINUS, 1),
+            '*' => self.makeToken(.STAR, 1),
+            '/' => self.makeToken(.SLASH, 1),
+            ',' => self.makeToken(.COMMA, 1),
+            ';' => self.makeToken(.SEMICOLON, 1),
+            '(' => self.makeToken(.LPAREN, 1),
+            ')' => self.makeToken(.RPAREN, 1),
+            '{' => self.makeToken(.LBRACE, 1),
+            '}' => self.makeToken(.RBRACE, 1),
+            '"' => self.nextString(),
+            else => if (self.isDigitAt(self.cursor))
+                self.nextNumber()
+            else if (self.isIdentifierAt(self.cursor))
+                self.nextIdentifier()
+            else
+                self.makeToken(.ILLEGAL, 1),
+        };
         self.cursor += token.literal.len;
         self.line_pos += token.literal.len;
         return token;
