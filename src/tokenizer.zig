@@ -8,6 +8,7 @@ pub const TokenType = enum {
     FALSE,
     NIL,
 
+    IMPORT,
     VAR,
     FUNCTION,
     RETURN,
@@ -38,6 +39,7 @@ pub const TokenType = enum {
     LBRACE,
     RBRACE,
     COMMA,
+    DOT,
     SEMICOLON,
 
     ILLEGAL,
@@ -192,6 +194,8 @@ pub const Tokenizer = struct {
         } else if (len == 6) {
             if (self.checkKeyword("return")) {
                 token_type = .RETURN;
+            } else if (self.checkKeyword("import")) {
+                token_type = .IMPORT;
             }
         }
         return self.makeToken(token_type, len);
@@ -237,6 +241,7 @@ pub const Tokenizer = struct {
             '*' => self.makeToken(.STAR, 1),
             '/' => self.makeToken(.SLASH, 1),
             ',' => self.makeToken(.COMMA, 1),
+            '.' => self.makeToken(.DOT, 1),
             ';' => self.makeToken(.SEMICOLON, 1),
             '(' => self.makeToken(.LPAREN, 1),
             ')' => self.makeToken(.RPAREN, 1),

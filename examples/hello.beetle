@@ -1,0 +1,16 @@
+var five = 5;
+var ten = 10.5;
+
+// this function adds two values
+var add = fn(x, y) {
+  return x + y;
+};
+
+var result = add(five, ten);
+
+// this dict is returned by import("hello");
+var m = {};
+m.add = add;
+m["sub"] = fn(x, y) { return x - y; };
+return m;
+
