@@ -6,81 +6,60 @@ pub const Identifier = struct {
     token: tok.Token,
 };
 
+pub const Expression = union(enum) {
+    dummy_expression: DummyExpression,
+
+    fn eval(self: Expression) void {
+        switch (self) {
+            inline else => |s| s.eval(),
+        }
+    }
+};
+
 const stdout = std.io.getStdOut().writer();
-pub const IExpression = struct {
-    evalFn: *const fn (*IExpression) void,
-
-    fn eval(_: *IExpression) void {
+pub const DummyExpression = struct {
+    fn eval(_: DummyExpression) void {
         stdout.writeAll("Evaluated!\n") catch {};
-        // iface.evalFn(iface);
     }
 };
 
-const IStatementTable = struct {
-    executeFn: *const fn (*IStatement) void,
-    deinitFn: *const fn (*IStatement, std.mem.Allocator) void,
-};
+pub const Statement = union(enum) {
+    var_statement: VarStatement,
 
-pub const IStatement = struct {
-    self: *anyopaque,
-    vtable: *const IStatementTable,
-
-    fn execute(iface: *IStatement) void {
-        iface.vtable.executeFn(@alignCast(@ptrCast(iface.self)));
+    fn execute(self: *Statement) void {
+        switch (self.*) {
+            inline else => |*s| s.execute(),
+        }
     }
-
-    fn deinit(iface: *IStatement, allocator: std.mem.Allocator) void {
-        iface.vtable.deinitFn(@alignCast(@ptrCast(iface.self)), allocator);
-    }
-};
-
-const varStatementVTable = IStatementTable{
-    .executeFn = VarStatement.execute,
-    .deinitFn = VarStatement.deinit,
 };
 
 pub const VarStatement = struct {
-    iStatement: IStatement,
     identifier: Identifier,
-    expression: IExpression,
+    expression: Expression,
 
-    pub fn init(allocator: std.mem.Allocator, identifier: Identifier, expression: IExpression) ?*VarStatement {
-        const vs = allocator.create(VarStatement) catch {
-            return null;
-        };
-        vs.* = VarStatement{
-            .iStatement = IStatement{ .self = vs, .vtable = &varStatementVTable },
+    pub fn init(identifier: Identifier, expression: Expression) VarStatement {
+        return VarStatement{
             .identifier = identifier,
             .expression = expression,
         };
-        return vs;
     }
 
-    fn deinit(iface: *IStatement, allocator: std.mem.Allocator) void {
-        const self: *VarStatement = @fieldParentPtr("iStatement", iface);
-        allocator.destroy(self);
-    }
-
-    fn execute(iface: *IStatement) void {
-        var self: *VarStatement = @fieldParentPtr("iStatement", iface);
+    fn execute(self: *VarStatement) void {
         self.expression.eval();
     }
 };
 
 pub const Module = struct {
-    statements: std.ArrayList(IStatement),
+    statements: std.ArrayList(Statement),
 
     pub fn init(allocator: std.mem.Allocator) Module {
-        const statements = std.ArrayList(IStatement).init(allocator);
+        const statements = std.ArrayList(Statement).init(allocator);
         return Module{
             .statements = statements,
         };
     }
 
-    pub fn deinit(self: *Module, allocator: std.mem.Allocator) void {
-        for (self.statements.items) |*statement| {
-            statement.deinit(allocator);
-        }
+    pub fn deinit(self: *Module) void {
         self.statements.deinit();
     }
 

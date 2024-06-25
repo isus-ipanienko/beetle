@@ -21,7 +21,7 @@ pub fn main() !void {
             try stdout.print("{}\n", .{statement});
         }
         module.run();
-        module.deinit(gpa);
+        module.deinit();
         try stdout.writeAll("> ");
     }
 }

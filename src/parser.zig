@@ -50,17 +50,15 @@ pub const Parser = struct {
         return ast.Identifier{ .token = current_token };
     }
 
-    fn parseExpression(self: *Parser) ?ast.IExpression {
+    fn parseExpression(self: *Parser) ?ast.Expression {
         // TODO: parse expressions
         while (!self.isCurrentToken(.SEMICOLON)) {
             self.advanceToken();
         }
-        return ast.IExpression{
-            .evalFn = undefined,
-        };
+        return ast.Expression{ .dummy_expression = ast.DummyExpression{} };
     }
 
-    fn parseVarStatement(self: *Parser) ?*ast.VarStatement {
+    fn parseVarStatement(self: *Parser) ?ast.VarStatement {
         const identifier = self.parseIdentifier();
         if (identifier == null or !self.expectCurrentToken(.EQUAL)) {
             return null;
@@ -69,16 +67,16 @@ pub const Parser = struct {
         if (expression == null) {
             return null;
         }
-        return ast.VarStatement.init(self.allocator, identifier.?, expression.?);
+        return ast.VarStatement.init(identifier.?, expression.?);
     }
 
-    fn parseStatement(self: *Parser) ?ast.IStatement {
+    fn parseStatement(self: *Parser) ?ast.Statement {
         switch (self.current_token.token_type) {
             .VAR => {
                 self.advanceToken();
                 const statement = self.parseVarStatement();
                 if (statement) |s| {
-                    return s.iStatement;
+                    return ast.Statement{ .var_statement = s };
                 }
             },
             else => {},
@@ -89,7 +87,7 @@ pub const Parser = struct {
     pub fn parseModule(self: *Parser) ast.Module {
         var module = ast.Module.init(self.allocator);
         while (self.current_token.token_type != .EOF) {
-            const statement: ?ast.IStatement = self.parseStatement();
+            const statement: ?ast.Statement = self.parseStatement();
             if (statement) |s| {
                 module.statements.append(s) catch {};
             }
