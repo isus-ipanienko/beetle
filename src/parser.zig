@@ -3,11 +3,35 @@ const std = @import("std");
 const tok = @import("tokenizer.zig");
 const ast = @import("ast.zig");
 
+pub const Error = union(enum) {
+    token_error: TokenError,
+
+    pub fn toString(self: *Error, allocator: std.mem.Allocator) ![]u8 {
+        return switch (self.*) {
+            inline else => |*s| s.toString(allocator),
+        };
+    }
+};
+
+const TokenError = struct {
+    actual: tok.Token,
+    expected: []const u8,
+
+    fn toString(self: TokenError, allocator: std.mem.Allocator) ![]u8 {
+        return std.fmt.allocPrint(
+            allocator,
+            "{}:{}: error: expected {s}, got {s}",
+            .{ self.actual.line_no, self.actual.line_pos, self.expected, self.actual.literal },
+        );
+    }
+};
+
 pub const Parser = struct {
     tokenizer: tok.Tokenizer,
     current_token: tok.Token,
     next_token: tok.Token,
     allocator: std.mem.Allocator,
+    errors: std.ArrayList(Error),
 
     pub fn init(allocator: std.mem.Allocator, tokenizer: tok.Tokenizer) Parser {
         var parser = Parser{
@@ -15,10 +39,15 @@ pub const Parser = struct {
             .current_token = undefined,
             .next_token = undefined,
             .allocator = allocator,
+            .errors = std.ArrayList(Error).init(allocator),
         };
         parser.advanceToken();
         parser.advanceToken();
         return parser;
+    }
+
+    pub fn deinit(self: *Parser) void {
+        self.errors.deinit();
     }
 
     fn advanceToken(self: *Parser) void {
@@ -42,45 +71,94 @@ pub const Parser = struct {
         return true;
     }
 
-    fn parseIdentifier(self: *Parser) ?ast.Identifier {
-        const current_token = self.current_token;
-        if (!self.expectCurrentToken(.IDENTIFIER)) {
-            return null;
-        }
-        return ast.Identifier{ .token = current_token };
-    }
+    const Precedence = enum(u8) {
+        LOWEST,
+        ASSIGN, // =
+        OR, // or
+        AND, // and
+        EQUALITT, // == !=
+        COMPARISON, // < > <= >=
+        SUM, // + -
+        PRODUCT, // * /
+        PREFIX, // ! -
+        CALL, // . ()
+    };
 
-    fn parseExpression(self: *Parser) ?ast.Expression {
+    const OperatorCallbacks = struct {
+        prefix: fn () ast.Expression,
+        infix: fn (ast.Expression) ast.Expression,
+    };
+
+    fn parseExpression(self: *Parser, _: Precedence) ?ast.Expression {
         // TODO: parse expressions
         while (!self.isCurrentToken(.SEMICOLON)) {
             self.advanceToken();
         }
-        return ast.Expression{ .dummy_expression = ast.DummyExpression{} };
+        return .{ .dummy_expression = ast.DummyExpression{} };
+    }
+
+    fn parseIdentifier(self: *Parser) ?ast.Identifier {
+        const current_token = self.current_token;
+        if (!self.expectCurrentToken(.IDENTIFIER)) {
+            self.addError(.{ .token_error = .{
+                .actual = self.current_token,
+                .expected = "an identifier",
+            } });
+            return null;
+        }
+        return .{ .token = current_token };
     }
 
     fn parseVarStatement(self: *Parser) ?ast.VarStatement {
         const identifier = self.parseIdentifier();
-        if (identifier == null or !self.expectCurrentToken(.EQUAL)) {
+        if (identifier == null) {
             return null;
         }
-        const expression = self.parseExpression();
-        if (expression == null) {
+        if (!self.expectCurrentToken(.EQUAL)) {
+            self.addError(.{ .token_error = .{
+                .actual = self.current_token,
+                .expected = "=",
+            } });
             return null;
         }
-        return ast.VarStatement.init(identifier.?, expression.?);
+        const value = self.parseExpression(.LOWEST);
+        if (value == null) {
+            return null;
+        }
+        return .{ .identifier = identifier.?, .value = value.? };
+    }
+
+    fn parseReturnStatement(self: *Parser) ?ast.ReturnStatement {
+        const value = self.parseExpression(.LOWEST);
+        if (value == null) {
+            return null;
+        }
+        return .{ .value = value.? };
     }
 
     fn parseStatement(self: *Parser) ?ast.Statement {
         switch (self.current_token.token_type) {
             .VAR => {
                 self.advanceToken();
-                const statement = self.parseVarStatement();
-                if (statement) |s| {
-                    return ast.Statement{ .var_statement = s };
+                if (self.parseVarStatement()) |s| {
+                    return .{ .var_statement = s };
                 }
             },
+            .RETURN => {
+                self.advanceToken();
+                if (self.parseReturnStatement()) |s| {
+                    return .{ .return_statement = s };
+                }
+            },
+            .IF => {},
+            .FOR => {},
+            .WHILE => {},
             else => {},
         }
+        self.addError(.{ .token_error = .{
+            .actual = self.current_token,
+            .expected = "an identifier, var, return, if, for or while",
+        } });
         return null;
     }
 
@@ -94,5 +172,9 @@ pub const Parser = struct {
             self.advanceToken();
         }
         return module;
+    }
+
+    fn addError(self: *Parser, err: Error) void {
+        self.errors.append(err) catch {};
     }
 };

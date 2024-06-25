@@ -25,6 +25,7 @@ pub const DummyExpression = struct {
 
 pub const Statement = union(enum) {
     var_statement: VarStatement,
+    return_statement: ReturnStatement,
 
     fn execute(self: *Statement) void {
         switch (self.*) {
@@ -33,19 +34,20 @@ pub const Statement = union(enum) {
     }
 };
 
+pub const ReturnStatement = struct {
+    value: Expression,
+
+    fn execute(self: *ReturnStatement) void {
+        self.value.eval();
+    }
+};
+
 pub const VarStatement = struct {
     identifier: Identifier,
-    expression: Expression,
-
-    pub fn init(identifier: Identifier, expression: Expression) VarStatement {
-        return VarStatement{
-            .identifier = identifier,
-            .expression = expression,
-        };
-    }
+    value: Expression,
 
     fn execute(self: *VarStatement) void {
-        self.expression.eval();
+        self.value.eval();
     }
 };
 
@@ -53,9 +55,8 @@ pub const Module = struct {
     statements: std.ArrayList(Statement),
 
     pub fn init(allocator: std.mem.Allocator) Module {
-        const statements = std.ArrayList(Statement).init(allocator);
         return Module{
-            .statements = statements,
+            .statements = std.ArrayList(Statement).init(allocator),
         };
     }
 

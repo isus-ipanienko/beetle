@@ -20,8 +20,12 @@ pub fn main() !void {
         for (module.statements.items) |statement| {
             try stdout.print("{}\n", .{statement});
         }
+        for (parser.errors.items) |*err| {
+            try stdout.print("{s}\n", .{try err.toString(gpa)});
+        }
         module.run();
         module.deinit();
+        parser.deinit();
         try stdout.writeAll("> ");
     }
 }
