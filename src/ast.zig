@@ -23,6 +23,12 @@ pub const Expression = union(enum) {
         allocator.destroy(self);
     }
 
+    pub fn toString(self: *const Expression, allocator: std.mem.Allocator) []const u8 {
+        return switch (self.*) {
+            inline else => |*s| s.toString(allocator),
+        };
+    }
+
     fn eval(self: *Expression) void {
         switch (self.*) {
             inline else => |s| s.eval(),
@@ -31,24 +37,44 @@ pub const Expression = union(enum) {
 };
 
 pub const PrefixExpression = struct {
-    operator: tok.TokenType,
+    operator: tok.Token,
     expression: *Expression,
 
     fn destroy(self: *PrefixExpression, allocator: std.mem.Allocator) void {
         self.expression.destroy(allocator);
     }
 
+    fn toString(self: *const PrefixExpression, allocator: std.mem.Allocator) []const u8 {
+        return std.fmt.allocPrint(
+            allocator,
+            "{s}{s}",
+            .{ self.operator.literal, self.expression.toString(allocator) },
+        ) catch {
+            return "ERROR";
+        };
+    }
+
     fn eval(_: PrefixExpression) void {}
 };
 
 pub const InfixExpression = struct {
-    operator: tok.TokenType,
+    operator: tok.Token,
     left: *Expression,
     right: *Expression,
 
     fn destroy(self: *InfixExpression, allocator: std.mem.Allocator) void {
         self.left.destroy(allocator);
         self.right.destroy(allocator);
+    }
+
+    fn toString(self: *const InfixExpression, allocator: std.mem.Allocator) []const u8 {
+        return std.fmt.allocPrint(
+            allocator,
+            "({s} {s} {s})",
+            .{ self.left.toString(allocator), self.operator.literal, self.right.toString(allocator) },
+        ) catch {
+            return "ERROR";
+        };
     }
 
     fn eval(_: InfixExpression) void {}
@@ -59,6 +85,12 @@ pub const IdentifierExpression = struct {
 
     fn destroy(_: *IdentifierExpression, _: std.mem.Allocator) void {}
 
+    fn toString(self: *const IdentifierExpression, allocator: std.mem.Allocator) []const u8 {
+        return std.fmt.allocPrint(allocator, "{s}", .{self.token.literal}) catch {
+            return "ERROR";
+        };
+    }
+
     fn eval(_: IdentifierExpression) void {}
 };
 
@@ -67,6 +99,12 @@ pub const NumberLiteralExpression = struct {
 
     fn destroy(_: *NumberLiteralExpression, _: std.mem.Allocator) void {}
 
+    fn toString(self: *const NumberLiteralExpression, allocator: std.mem.Allocator) []const u8 {
+        return std.fmt.allocPrint(allocator, "{d}", .{self.value}) catch {
+            return "ERROR";
+        };
+    }
+
     fn eval(_: NumberLiteralExpression) void {}
 };
 
@@ -74,6 +112,12 @@ pub const Statement = union(enum) {
     var_statement: VarStatement,
     return_statement: ReturnStatement,
     expression_statement: ExpressionStatement,
+
+    pub fn toString(self: *const Statement, allocator: std.mem.Allocator) []const u8 {
+        return switch (self.*) {
+            inline else => |*s| s.toString(allocator),
+        };
+    }
 
     fn execute(self: *Statement) void {
         switch (self.*) {
@@ -85,6 +129,16 @@ pub const Statement = union(enum) {
 pub const ReturnStatement = struct {
     value: *Expression,
 
+    fn toString(self: *const ReturnStatement, allocator: std.mem.Allocator) []const u8 {
+        return std.fmt.allocPrint(
+            allocator,
+            "return {s};",
+            .{self.value.toString(allocator)},
+        ) catch {
+            return "ERROR";
+        };
+    }
+
     fn execute(self: *ReturnStatement) void {
         self.value.eval();
     }
@@ -94,6 +148,16 @@ pub const VarStatement = struct {
     identifier: IdentifierExpression,
     value: *Expression,
 
+    fn toString(self: *const VarStatement, allocator: std.mem.Allocator) []const u8 {
+        return std.fmt.allocPrint(
+            allocator,
+            "var {s} = {s};",
+            .{ self.identifier.toString(allocator), self.value.toString(allocator) },
+        ) catch {
+            return "ERROR";
+        };
+    }
+
     fn execute(self: *VarStatement) void {
         self.value.eval();
     }
@@ -101,6 +165,12 @@ pub const VarStatement = struct {
 
 pub const ExpressionStatement = struct {
     value: *Expression,
+
+    fn toString(self: *const ExpressionStatement, allocator: std.mem.Allocator) []const u8 {
+        return std.fmt.allocPrint(allocator, "{s}", .{self.value.toString(allocator)}) catch {
+            return "ERROR";
+        };
+    }
 
     fn execute(self: *ExpressionStatement) void {
         self.value.eval();

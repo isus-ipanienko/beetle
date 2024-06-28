@@ -6,6 +6,7 @@ const ast = @import("ast.zig");
 pub const Error = union(enum) {
     token_error: TokenError,
     prefix_error: PrefixError,
+    infix_error: InfixError,
 
     pub fn toString(self: *Error, allocator: std.mem.Allocator) ![]u8 {
         return switch (self.*) {
@@ -34,6 +35,18 @@ const PrefixError = struct {
         return std.fmt.allocPrint(
             allocator,
             "prefix not defined for {s}",
+            .{@tagName(self.token_type)},
+        );
+    }
+};
+
+const InfixError = struct {
+    token_type: tok.TokenType,
+
+    fn toString(self: InfixError, allocator: std.mem.Allocator) ![]u8 {
+        return std.fmt.allocPrint(
+            allocator,
+            "infix not defined for {s}",
             .{@tagName(self.token_type)},
         );
     }
@@ -160,7 +173,7 @@ pub const Parser = struct {
     }
 
     fn parsePrefixExpression(self: *Parser) ?*ast.Expression {
-        const operator = self.current_token.token_type;
+        const operator = self.current_token;
         self.advanceToken();
         const expression = self.parseExpression(.PREFIX);
         if (expression == null) {
@@ -173,8 +186,8 @@ pub const Parser = struct {
     }
 
     fn parseInfixExpression(self: *Parser, left: *ast.Expression) ?*ast.Expression {
-        const operator = self.current_token.token_type;
-        const rule: ParseRule = getParseRule(operator);
+        const operator = self.current_token;
+        const rule: ParseRule = getParseRule(operator.token_type);
         self.advanceToken();
         const right = self.parseExpression(rule.precedence);
         if (right == null) {
@@ -194,13 +207,16 @@ pub const Parser = struct {
         }
         var left = rule.prefix.?(self);
         while (!self.isNextToken(.SEMICOLON) and
-            @intFromEnum(precedence) < @intFromEnum(getParseRule(self.next_token.token_type).precedence))
+            @intFromEnum(precedence) < @intFromEnum(getParseRule(self.current_token.token_type).precedence))
         {
+            if (left == null) {
+                return null;
+            }
             rule = getParseRule(self.current_token.token_type);
-            if (rule.infix == null or left == null) {
+            if (rule.infix == null) {
+                self.addError(.{ .infix_error = .{ .token_type = self.current_token.token_type } });
                 return left;
             }
-            self.advanceToken();
             left = rule.infix.?(self, left.?);
         }
         return left;

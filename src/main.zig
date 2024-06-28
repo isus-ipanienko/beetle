@@ -18,7 +18,7 @@ pub fn main() !void {
         var parser = parse.Parser.init(gpa, tokenizer);
         var module = parser.parseModule();
         for (module.statements.items) |statement| {
-            try stdout.print("{}\n", .{statement});
+            try stdout.print("{s}\n", .{statement.toString(gpa)});
         }
         for (parser.errors.items) |*err| {
             try stdout.print("{s}\n", .{try err.toString(gpa)});
