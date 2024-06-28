@@ -79,22 +79,26 @@ pub const Parser = struct {
     };
 
     pub fn getParseRule(token_type: tok.TokenType) ParseRule {
-        comptime var callbacks =
+        const t = tok.TokenType;
+        comptime var cb =
             [_]ParseRule{.{ .prefix = null, .infix = null, .precedence = .LOWEST }} ** 256;
-        callbacks[@intFromEnum(tok.TokenType.IDENTIFIER)] = .{ .prefix = parseIdentifierExpression, .infix = null, .precedence = .LOWEST };
-        callbacks[@intFromEnum(tok.TokenType.NUMBER)] = .{ .prefix = parseNumberLiteralExpression, .infix = null, .precedence = .LOWEST };
-        callbacks[@intFromEnum(tok.TokenType.BANG)] = .{ .prefix = parsePrefixExpression, .infix = null, .precedence = .LOWEST };
-        callbacks[@intFromEnum(tok.TokenType.MINUS)] = .{ .prefix = parsePrefixExpression, .infix = parseInfixExpression, .precedence = .SUM };
-        callbacks[@intFromEnum(tok.TokenType.PLUS)] = .{ .prefix = null, .infix = parseInfixExpression, .precedence = .SUM };
-        callbacks[@intFromEnum(tok.TokenType.SLASH)] = .{ .prefix = null, .infix = parseInfixExpression, .precedence = .PRODUCT };
-        callbacks[@intFromEnum(tok.TokenType.STAR)] = .{ .prefix = null, .infix = parseInfixExpression, .precedence = .PRODUCT };
-        callbacks[@intFromEnum(tok.TokenType.EQUAL_EQUAL)] = .{ .prefix = null, .infix = parseInfixExpression, .precedence = .EQUALITY };
-        callbacks[@intFromEnum(tok.TokenType.BANG_EQUAL)] = .{ .prefix = null, .infix = parseInfixExpression, .precedence = .EQUALITY };
-        callbacks[@intFromEnum(tok.TokenType.LESS)] = .{ .prefix = null, .infix = parseInfixExpression, .precedence = .COMPARISON };
-        callbacks[@intFromEnum(tok.TokenType.LESS_EQUAL)] = .{ .prefix = null, .infix = parseInfixExpression, .precedence = .COMPARISON };
-        callbacks[@intFromEnum(tok.TokenType.GREATER)] = .{ .prefix = null, .infix = parseInfixExpression, .precedence = .COMPARISON };
-        callbacks[@intFromEnum(tok.TokenType.GREATER_EQUAL)] = .{ .prefix = null, .infix = parseInfixExpression, .precedence = .COMPARISON };
-        return callbacks[@intFromEnum(token_type)];
+        cb[@intFromEnum(t.IDENTIFIER)] = .{ .prefix = parseIdentifierExpression, .infix = null, .precedence = .LOWEST };
+        cb[@intFromEnum(t.NUMBER)] = .{ .prefix = parseNumberLiteralExpression, .infix = null, .precedence = .LOWEST };
+        cb[@intFromEnum(t.BANG)] = .{ .prefix = parsePrefixExpression, .infix = null, .precedence = .LOWEST };
+        cb[@intFromEnum(t.MINUS)] = .{ .prefix = parsePrefixExpression, .infix = parseInfixExpression, .precedence = .SUM };
+        cb[@intFromEnum(t.PLUS)] = .{ .prefix = null, .infix = parseInfixExpression, .precedence = .SUM };
+        cb[@intFromEnum(t.SLASH)] = .{ .prefix = null, .infix = parseInfixExpression, .precedence = .PRODUCT };
+        cb[@intFromEnum(t.STAR)] = .{ .prefix = null, .infix = parseInfixExpression, .precedence = .PRODUCT };
+        cb[@intFromEnum(t.EQUAL_EQUAL)] = .{ .prefix = null, .infix = parseInfixExpression, .precedence = .EQUALITY };
+        cb[@intFromEnum(t.BANG_EQUAL)] = .{ .prefix = null, .infix = parseInfixExpression, .precedence = .EQUALITY };
+        cb[@intFromEnum(t.LESS)] = .{ .prefix = null, .infix = parseInfixExpression, .precedence = .COMPARISON };
+        cb[@intFromEnum(t.LESS_EQUAL)] = .{ .prefix = null, .infix = parseInfixExpression, .precedence = .COMPARISON };
+        cb[@intFromEnum(t.GREATER)] = .{ .prefix = null, .infix = parseInfixExpression, .precedence = .COMPARISON };
+        cb[@intFromEnum(t.GREATER_EQUAL)] = .{ .prefix = null, .infix = parseInfixExpression, .precedence = .COMPARISON };
+        cb[@intFromEnum(t.TRUE)] = .{ .prefix = parseBooleanExpression, .infix = null, .precedence = .LOWEST };
+        cb[@intFromEnum(t.FALSE)] = .{ .prefix = parseBooleanExpression, .infix = null, .precedence = .LOWEST };
+        cb[@intFromEnum(t.LPAREN)] = .{ .prefix = parseGroupedExpression, .infix = null, .precedence = .LOWEST };
+        return cb[@intFromEnum(token_type)];
     }
 
     pub fn init(allocator: std.mem.Allocator, tokenizer: tok.Tokenizer) Parser {
@@ -152,10 +156,7 @@ pub const Parser = struct {
         if (identifier == null) {
             return null;
         }
-        return ast.Expression.create(
-            self.allocator,
-            .{ .identifier_expression = identifier.? },
-        );
+        return ast.Expression.create(self.allocator, .{ .identifier_expression = identifier.? });
     }
 
     fn parseNumberLiteralExpression(self: *Parser) ?*ast.Expression {
@@ -166,10 +167,13 @@ pub const Parser = struct {
             return null;
         };
         self.advanceToken();
-        return ast.Expression.create(
-            self.allocator,
-            .{ .number_literal_expression = .{ .value = number } },
-        );
+        return ast.Expression.create(self.allocator, .{ .number_literal_expression = .{ .value = number } });
+    }
+
+    fn parseBooleanExpression(self: *Parser) ?*ast.Expression {
+        const token_type = self.current_token.token_type;
+        self.advanceToken();
+        return ast.Expression.create(self.allocator, .{ .boolean_expression = .{ .value = token_type == tok.TokenType.TRUE } });
     }
 
     fn parsePrefixExpression(self: *Parser) ?*ast.Expression {
@@ -197,6 +201,19 @@ pub const Parser = struct {
             self.allocator,
             .{ .infix_expression = .{ .operator = operator, .left = left, .right = right.? } },
         );
+    }
+
+    fn parseGroupedExpression(self: *Parser) ?*ast.Expression {
+        self.advanceToken();
+        const expression = self.parseExpression(.LOWEST);
+        if (expression == null) {
+            return null;
+        }
+        if (!self.consumeToken(.RPAREN)) {
+            expression.?.destroy(self.allocator);
+            return null;
+        }
+        return expression;
     }
 
     fn parseExpression(self: *Parser, precedence: Precedence) ?*ast.Expression {

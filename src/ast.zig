@@ -7,6 +7,7 @@ pub const Expression = union(enum) {
     number_literal_expression: NumberLiteralExpression,
     prefix_expression: PrefixExpression,
     infix_expression: InfixExpression,
+    boolean_expression: BooleanExpression,
 
     pub fn create(allocator: std.mem.Allocator, options: Expression) *Expression {
         const new: *Expression = allocator.create(Expression) catch {
@@ -16,9 +17,9 @@ pub const Expression = union(enum) {
         return new;
     }
 
-    fn destroy(self: *Expression, allocator: std.mem.Allocator) void {
-        switch (self) {
-            inline else => |s| s.destroy(allocator),
+    pub fn destroy(self: *Expression, allocator: std.mem.Allocator) void {
+        switch (self.*) {
+            inline else => |*s| s.destroy(allocator),
         }
         allocator.destroy(self);
     }
@@ -106,6 +107,20 @@ pub const NumberLiteralExpression = struct {
     }
 
     fn eval(_: NumberLiteralExpression) void {}
+};
+
+pub const BooleanExpression = struct {
+    value: bool,
+
+    fn destroy(_: *BooleanExpression, _: std.mem.Allocator) void {}
+
+    fn toString(self: *const BooleanExpression, allocator: std.mem.Allocator) []const u8 {
+        return std.fmt.allocPrint(allocator, "{}", .{self.value}) catch {
+            return "ERROR";
+        };
+    }
+
+    fn eval(_: BooleanExpression) void {}
 };
 
 pub const Statement = union(enum) {
