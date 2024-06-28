@@ -127,6 +127,7 @@ pub const Statement = union(enum) {
     var_statement: VarStatement,
     return_statement: ReturnStatement,
     expression_statement: ExpressionStatement,
+    if_statement: IfStatement,
 
     pub fn toString(self: *const Statement, allocator: std.mem.Allocator) []const u8 {
         return switch (self.*) {
@@ -189,6 +190,60 @@ pub const ExpressionStatement = struct {
 
     fn execute(self: *ExpressionStatement) void {
         self.value.eval();
+    }
+};
+
+pub const BlockStatement = struct {
+    statements: std.ArrayList(Statement),
+
+    pub fn init(allocator: std.mem.Allocator) BlockStatement {
+        return BlockStatement{
+            .statements = std.ArrayList(Statement).init(allocator),
+        };
+    }
+
+    fn toString(self: *const BlockStatement, allocator: std.mem.Allocator) []const u8 {
+        var accumulator: []const u8 = "";
+        for (self.statements.items) |*statement| {
+            accumulator = std.fmt.allocPrint(
+                allocator,
+                "{s}\n    {s}",
+                .{ accumulator, statement.toString(allocator) },
+            ) catch {
+                return "ERROR";
+            };
+        }
+        return accumulator;
+    }
+};
+
+pub const IfStatement = struct {
+    condition: *Expression,
+    truthy: BlockStatement,
+    falsey: ?BlockStatement,
+
+    fn toString(self: *const IfStatement, allocator: std.mem.Allocator) []const u8 {
+        var accumulator: []const u8 = std.fmt.allocPrint(
+            allocator,
+            "if ({s}) {{{s}\n}}",
+            .{ self.condition.toString(allocator), self.truthy.toString(allocator) },
+        ) catch {
+            return "ERROR";
+        };
+        if (self.falsey) |falsey| {
+            accumulator = std.fmt.allocPrint(
+                allocator,
+                "{s} else {{{s}\n}}",
+                .{ accumulator, falsey.toString(allocator) },
+            ) catch {
+                return "ERROR";
+            };
+        }
+        return accumulator;
+    }
+
+    fn execute(self: *IfStatement) void {
+        self.condition.eval();
     }
 };
 

@@ -195,6 +195,7 @@ pub const Parser = struct {
         self.advanceToken();
         const right = self.parseExpression(rule.precedence);
         if (right == null) {
+            left.destroy(self.allocator);
             return null;
         }
         return ast.Expression.create(
@@ -266,6 +267,52 @@ pub const Parser = struct {
         return .{ .value = value.? };
     }
 
+    fn parseBlockStatement(self: *Parser) ?ast.BlockStatement {
+        var block = ast.BlockStatement.init(self.allocator);
+        while (!self.isCurrentToken(.RBRACE) and !self.isCurrentToken(.EOF)) {
+            const statement: ?ast.Statement = self.parseStatement();
+            if (statement) |s| {
+                block.statements.append(s) catch {};
+            }
+            self.advanceToken();
+        }
+        return block;
+    }
+
+    fn parseIfStatement(self: *Parser) ?ast.IfStatement {
+        if (!self.consumeToken(.LPAREN)) {
+            return null;
+        }
+        const condition = self.parseExpression(.LOWEST);
+        if (condition == null) {
+            return null;
+        }
+        if (!self.consumeToken(.RPAREN) or !self.consumeToken(.LBRACE)) {
+            return null;
+        }
+        const truthy = self.parseBlockStatement();
+        if (truthy == null) {
+            return null;
+        }
+        if (!self.consumeToken(.RBRACE)) {
+            return null;
+        }
+        var falsey: ?ast.BlockStatement = null;
+        if (self.consumeToken(.ELSE)) {
+            if (!self.consumeToken(.LBRACE)) {
+                return null;
+            }
+            falsey = self.parseBlockStatement();
+            if (falsey == null) {
+                return null;
+            }
+            if (!self.consumeToken(.RBRACE)) {
+                return null;
+            }
+        }
+        return .{ .condition = condition.?, .truthy = truthy.?, .falsey = falsey };
+    }
+
     fn parseExpressionStatement(self: *Parser) ?ast.ExpressionStatement {
         const value = self.parseExpression(.LOWEST);
         if (value == null) {
@@ -291,7 +338,12 @@ pub const Parser = struct {
                     return .{ .return_statement = s };
                 }
             },
-            .IF => {},
+            .IF => {
+                self.advanceToken();
+                if (self.parseIfStatement()) |s| {
+                    return .{ .if_statement = s };
+                }
+            },
             .FOR => {},
             .WHILE => {},
             else => {
